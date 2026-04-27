@@ -1,4 +1,5 @@
 import os
+import warnings
 import pandas as pd
 from pathlib import Path
 from torch.utils.data import Dataset, DataLoader
@@ -17,8 +18,18 @@ class PCamDataset(Dataset):
         """
         self.image_dir = Path(image_dir)
         self.transform = transform
-        self.image_paths = sorted(self.image_dir.glob("*.tif"))
         self.labels_df = labels_df
+        self.image_paths = sorted(self.image_dir.glob("*.tif"))
+        self.image_paths = [p for p in self.image_paths if self._is_valid_image(p)]
+
+    def _is_valid_image(self, image_path):
+        try:
+            with Image.open(image_path) as img:
+                img.verify()
+            return True
+        except Exception as e:
+            warnings.warn(f"Skipping invalid image file: {image_path} ({e})")
+            return False
 
     def __len__(self):
         return len(self.image_paths)
@@ -63,7 +74,7 @@ def get_transforms(augment: bool = False):
         return transforms.Compose(base_transforms)
 
 
-def create_dataloaders(data_dir, batch_size=64, num_workers=4, augment=False):
+def create_dataloaders(data_dir, batch_size=64, num_workers=2, augment=False):
     """
     Create train and validation dataloaders.
     
@@ -89,16 +100,18 @@ def create_dataloaders(data_dir, batch_size=64, num_workers=4, augment=False):
     val_dataset = PCamDataset(val_dir, labels_df=None, transform=val_transform)
 
     train_loader = DataLoader(
-        train_dataset, 
-        batch_size=batch_size, 
-        shuffle=True, 
-        num_workers=num_workers
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=torch.cuda.is_available()
     )
     val_loader = DataLoader(
-        val_dataset, 
-        batch_size=batch_size, 
-        shuffle=False, 
-        num_workers=num_workers
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=torch.cuda.is_available()
     )
     
     return train_loader, val_loader

@@ -24,6 +24,8 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--data_dir", type=str, default="data")
     parser.add_argument("--output_dir", type=str, default="results")
+    parser.add_argument("--num_workers", type=int, default=2,
+                        help="Number of DataLoader workers. Lower values are safer in Colab.")
     return parser.parse_args()
 
 
@@ -83,6 +85,7 @@ def main():
     train_loader, val_loader = create_dataloaders(
         args.data_dir,
         batch_size=args.batch_size,
+        num_workers=args.num_workers,
         augment=augment
     )
 
