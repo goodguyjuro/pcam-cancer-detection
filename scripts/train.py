@@ -1,8 +1,16 @@
 import argparse
 import os
+import sys
+from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
+# Ensure the repository root is on PYTHONPATH so imports like `from src.data` work
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from src.data import create_dataloaders
 from src.model import get_model
 from src.utils import save_checkpoint
@@ -73,8 +81,8 @@ def main():
     print(f"Model v{args.model_version}: augmentation={'ON' if augment else 'OFF'}")
 
     train_loader, val_loader = create_dataloaders(
-        args.data_dir, 
-        batch_size=args.batch_size, 
+        args.data_dir,
+        batch_size=args.batch_size,
         augment=augment
     )
 
