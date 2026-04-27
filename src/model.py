@@ -4,6 +4,18 @@ import torch.nn.functional as F
 
 
 class SimpleCNN(nn.Module):
+    """
+    Simple CNN for binary image classification (96x96 RGB -> 2 classes).
+    
+    Architecture:
+    - Conv block 1: Conv2d(3→16) + BatchNorm (optional) + ReLU + MaxPool
+    - Conv block 2: Conv2d(16→32) + BatchNorm (optional) + ReLU + MaxPool
+    - FC block: Linear(32*24*24 → 128) + ReLU + Dropout (optional) → Linear(128 → 2)
+    
+    The progression:
+    - v1, v2: with batchnorm, without dropout
+    - v3, v4: with batchnorm and dropout
+    """
     def __init__(self, use_batchnorm=False, use_dropout=False):
         super(SimpleCNN, self).__init__()
         self.use_batchnorm = use_batchnorm
@@ -30,12 +42,19 @@ class SimpleCNN(nn.Module):
 
 
 def get_model(version: int = 1):
+    """
+    Get model based on version:
+    v1: SimpleCNN with batchnorm (baseline, no augmentation from data loader)
+    v2: SimpleCNN with batchnorm (same architecture, augmentation added via data loader)
+    v3: SimpleCNN with batchnorm + dropout (adds regularization)
+    v4: SimpleCNN with batchnorm + dropout (same as v3, for learning rate tuning)
+    """
     if version == 1:
-        return SimpleCNN(use_batchnorm=False, use_dropout=False)
-    if version == 2:
-        return SimpleCNN(use_batchnorm=False, use_dropout=False)
-    if version == 3:
         return SimpleCNN(use_batchnorm=True, use_dropout=False)
+    if version == 2:
+        return SimpleCNN(use_batchnorm=True, use_dropout=False)
+    if version == 3:
+        return SimpleCNN(use_batchnorm=True, use_dropout=True)
     if version == 4:
         return SimpleCNN(use_batchnorm=True, use_dropout=True)
 

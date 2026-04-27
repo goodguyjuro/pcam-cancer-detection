@@ -67,9 +67,16 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    train_dir = os.path.join(args.data_dir, "train")
-    val_dir = os.path.join(args.data_dir, "val")
-    train_loader, val_loader = create_dataloaders(train_dir, val_dir, batch_size=args.batch_size)
+    # Determine augmentation based on model version
+    # v1: no augmentation, v2+: with augmentation
+    augment = args.model_version >= 2
+    print(f"Model v{args.model_version}: augmentation={'ON' if augment else 'OFF'}")
+
+    train_loader, val_loader = create_dataloaders(
+        args.data_dir, 
+        batch_size=args.batch_size, 
+        augment=augment
+    )
 
     model = get_model(args.model_version).to(device)
     criterion = nn.CrossEntropyLoss()
