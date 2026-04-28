@@ -23,6 +23,7 @@ def plot_metrics(history, output_dir):
     plt.ylabel("Loss")
     plt.legend()
     plt.savefig(os.path.join(output_dir, "loss_curve.png"))
+    plt.show()
     plt.close()
 
     plt.figure(figsize=(10, 4))
@@ -32,4 +33,5 @@ def plot_metrics(history, output_dir):
     plt.ylabel("Accuracy")
     plt.legend()
     plt.savefig(os.path.join(output_dir, "accuracy_curve.png"))
+    plt.show()
     plt.close()

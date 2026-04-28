@@ -13,7 +13,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from src.data import create_dataloaders
 from src.model import get_model
-from src.utils import save_checkpoint
+from src.utils import save_checkpoint, plot_metrics
 
 
 def parse_args():
@@ -77,8 +77,6 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # Determine augmentation based on model version
-    # v1: no augmentation, v2+: with augmentation
     augment = args.model_version >= 2
     print(f"Model v{args.model_version}: augmentation={'ON' if augment else 'OFF'}")
 
@@ -86,7 +84,7 @@ def main():
         args.data_dir,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
-        augment=augment
+        augment=augment,
     )
 
     model = get_model(args.model_version).to(device)
@@ -96,10 +94,17 @@ def main():
     output_dir = os.path.join(args.output_dir, f"version_{args.model_version}")
     os.makedirs(output_dir, exist_ok=True)
 
+    history = {"train_loss": [], "val_loss": [], "train_acc": [], "val_acc": []}
     best_val_acc = 0.0
+
     for epoch in range(1, args.epochs + 1):
         train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, device)
         val_loss, val_acc = evaluate(model, val_loader, criterion, device)
+
+        history["train_loss"].append(train_loss)
+        history["val_loss"].append(val_loss)
+        history["train_acc"].append(train_acc)
+        history["val_acc"].append(val_acc)
 
         print(
             f"Epoch {epoch}/{args.epochs}:"
@@ -111,7 +116,9 @@ def main():
             best_val_acc = val_acc
             save_checkpoint(model, optimizer, epoch, os.path.join(output_dir, "best_checkpoint.pth"))
 
+    plot_metrics(history, output_dir)
     print(f"Best validation accuracy: {best_val_acc:.4f}")
+    print(f"Saved training curves and best checkpoint in {output_dir}")
 
 
 if __name__ == "__main__":
