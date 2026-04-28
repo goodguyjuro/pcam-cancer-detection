@@ -65,9 +65,12 @@ class PCamDataset(Dataset):
         return image, label
 
 def get_transforms(augment: bool = False):
+    mean = [0.7017027139663696, 0.5454603433609009, 0.6958017945289612]
+    std = [0.23928135633468628, 0.2822282612323761, 0.21662132441997528]
+
     base_transforms = [
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        transforms.Normalize(mean=mean, std=std),
     ]
 
     if augment:
@@ -79,7 +82,6 @@ def get_transforms(augment: bool = False):
         return transforms.Compose(augmentation + base_transforms)
 
     return transforms.Compose(base_transforms)
-
 
 def _read_labels(path):
     return pd.read_csv(path, dtype={"id": str})
