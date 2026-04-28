@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from src import model
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -26,23 +27,33 @@ def parse_args():
     parser.add_argument("--output_dir", type=str, default="results")
     parser.add_argument("--num_workers", type=int, default=2,
                         help="Number of DataLoader workers. Lower values are safer in Colab.")
+    parser.add_argument("--amp", action="store_true", help="Use automatic mixed precision on CUDA")
     return parser.parse_args()
 
 
-def train_one_epoch(model, loader, criterion, optimizer, device):
+def train_one_epoch(model, loader, criterion, optimizer, device, scaler=None, use_amp=False):
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
 
     for images, labels in loader:
-        images = images.to(device)
-        labels = labels.to(device)
-        optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
+        images = images.to(device, non_blocking=True)
+        labels = labels.to(device, non_blocking=True)
+
+        optimizer.zero_grad(set_to_none=True)
+
+        with torch.cuda.amp.autocast(enabled=use_amp):
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+
+        if scaler is not None and use_amp:
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            optimizer.step()
 
         running_loss += loss.item() * images.size(0)
         preds = outputs.argmax(dim=1)
@@ -51,8 +62,7 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
 
     return running_loss / total, correct / total
 
-
-def evaluate(model, loader, criterion, device):
+def evaluate(model, loader, criterion, device, use_amp=False):
     model.eval()
     running_loss = 0.0
     correct = 0
@@ -60,17 +70,19 @@ def evaluate(model, loader, criterion, device):
 
     with torch.no_grad():
         for images, labels in loader:
-            images = images.to(device)
-            labels = labels.to(device)
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+            images = images.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
+
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+
             running_loss += loss.item() * images.size(0)
             preds = outputs.argmax(dim=1)
             correct += (preds == labels).sum().item()
             total += labels.size(0)
 
     return running_loss / total, correct / total
-
 
 def main():
     args = parse_args()
@@ -91,6 +103,10 @@ def main():
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 
+    use_amp = args.amp and device.type == "cuda"
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    print(f"AMP: {'ON' if use_amp else 'OFF'}")
+
     output_dir = os.path.join(args.output_dir, f"version_{args.model_version}")
     os.makedirs(output_dir, exist_ok=True)
 
@@ -98,8 +114,23 @@ def main():
     best_val_acc = 0.0
 
     for epoch in range(1, args.epochs + 1):
-        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, device)
-        val_loss, val_acc = evaluate(model, val_loader, criterion, device)
+        train_loss, train_acc = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            device,
+            scaler=scaler,
+            use_amp=use_amp,
+        )
+
+        val_loss, val_acc = evaluate(
+            model,
+            val_loader,
+            criterion,
+            device,
+            use_amp=use_amp,
+        )
 
         history["train_loss"].append(train_loss)
         history["val_loss"].append(val_loss)

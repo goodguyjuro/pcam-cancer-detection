@@ -12,11 +12,13 @@ RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
 
 
 def load_labels():
-    labels_path = DATA_DIR / "train_labels.csv"
+    labels_path = DATA_DIR / "labels_train.csv"
     if not labels_path.exists():
-        print(f"Labels file not found: {labels_path}")
+        labels_path = DATA_DIR / "train_labels.csv"
+    if not labels_path.exists():
+        print(f"Labels file not found: {DATA_DIR / 'labels_train.csv'} or {DATA_DIR / 'train_labels.csv'}")
         return None
-    return pd.read_csv(labels_path)
+    return pd.read_csv(labels_path, dtype={"id": str})
 
 
 def plot_class_distribution(labels_df):
@@ -39,26 +41,40 @@ def plot_sample_images(labels_df):
     if labels_df is None:
         return
 
-    train_dir = DATA_DIR / "train"
+    train_dir = DATA_DIR / "train_new" if (DATA_DIR / "train_new").exists() else DATA_DIR / "train"
     if not train_dir.exists():
         print(f"Train images directory not found: {train_dir}")
         return
 
-    # Get sample images from each class
-    sample_0 = labels_df[labels_df['label'] == 0].sample(1)['id'].values[0] + '.tif'
-    sample_1 = labels_df[labels_df['label'] == 1].sample(1)['id'].values[0] + '.tif'
+    train_files = {p.stem for p in train_dir.glob("*.tif")}
+    existing_labels = labels_df[labels_df['id'].isin(train_files)]
+
+    def choose_sample(label_value):
+        subset = existing_labels[existing_labels['label'] == label_value]
+        if subset.empty:
+            return None
+        return subset.sample(1)['id'].values[0]
+
+    sample_0 = choose_sample(0)
+    sample_1 = choose_sample(1)
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    for ax, (img_name, title) in zip(axes, [(sample_0, 'No Tumor'), (sample_1, 'Tumor')]):
-        img_path = train_dir / img_name
-        if img_path.exists():
-            img = Image.open(img_path)
-            ax.imshow(img)
+    for ax, (sample_id, title) in zip(
+        axes,
+        [(sample_0, 'No Tumor'), (sample_1, 'Tumor')],
+    ):
+        if sample_id is None:
+            ax.text(0.5, 0.5, f'No {title.lower()} images found in train folder.', ha='center', va='center')
             ax.set_title(title)
             ax.axis('off')
-        else:
-            ax.text(0.5, 0.5, f'Image not found: {img_name}', ha='center', va='center')
-            ax.set_title(title)
+            continue
+
+        img_name = f"{sample_id}.tif"
+        img_path = train_dir / img_name
+        img = Image.open(img_path)
+        ax.imshow(img)
+        ax.set_title(f"{title} ({sample_id[:8]}...)")
+        ax.axis('off')
 
     plt.savefig(RESULTS_DIR / "sample_images.png")
     plt.close()
@@ -69,7 +85,7 @@ def compute_normalization_stats(labels_df):
     if labels_df is None:
         return
 
-    train_dir = DATA_DIR / "train"
+    train_dir = DATA_DIR / "train_new" if (DATA_DIR / "train_new").exists() else DATA_DIR / "train"
     if not train_dir.exists():
         print(f"Train images directory not found: {train_dir}")
         return
